@@ -1,0 +1,42 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'ap-south-1'
+        ECR_REGISTRY = '943264968937.dkr.ecr.ap-south-1.amazonaws.com'
+        IMAGE_NAME = 'order-service'
+    }
+
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                git branch: 'main', url: 'https://github.com/PrasadReddy-V/order-service.git'
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Build & Push Docker') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'jenkins-aws-creds') {
+                    sh """
+                    $(aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY})
+                    docker build -t ${IMAGE_NAME} .
+                    docker tag ${IMAGE_NAME}:latest ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+                    docker push ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished for order-service'
+        }
+    }
+}
